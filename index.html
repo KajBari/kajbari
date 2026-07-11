@@ -4,24 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   </head>
   <body>
-    <!-- Turnstile Container -->
-    <div id="turnstile-container" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-      <div class="cf-turnstile" data-sitekey="0x4AAAAAADzPdCUfrAO_QeEi" data-callback="onTurnstileSuccess"></div>
-    </div>
-
-    <!-- Main App Container (Hidden Initially) -->
-    <div id="root" style="display: none;"></div>
-
-    <script>
-      function onTurnstileSuccess(token) {
-        document.getElementById('root').style.display = 'block';
-        document.getElementById('turnstile-container').style.display = 'none';
-      }
-    </script>
-
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

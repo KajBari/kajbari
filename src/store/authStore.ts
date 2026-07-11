@@ -17,6 +17,9 @@ interface UserProfile {
   displayName?: string;
   photoURL?: string;
   dailyCompletions?: Record<string, Record<string, boolean>>; // { "YYYY-MM-DD": { taskId: true } }
+  lastBatchCompletedAt?: number;
+  batchCompletionsCount?: number;
+  taskCooldowns?: Record<string, { count: number; lastBatchAt: number }>;
 }
 
 interface AuthState {

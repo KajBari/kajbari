@@ -100,6 +100,12 @@ export function Dashboard() {
   const [completingTask, setCompletingTask] = useState(false);
   const [taskSuccess, setTaskSuccess] = useState<{ title: string; points: number } | null>(null);
   const [taskError, setTaskError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     fetchTasks();
@@ -155,10 +161,38 @@ export function Dashboard() {
       if (!newCompletions[today]) newCompletions[today] = {};
       newCompletions[today][activeTask.id] = true;
 
+      // Batch Logic for specific task type
+      const taskType = activeTask.type;
+      const taskCooldowns = profile.taskCooldowns ? { ...profile.taskCooldowns } : {};
+      const currentTaskCooldown = taskCooldowns[taskType] || { count: 0, lastBatchAt: 0 };
+      
+      let batchCount = currentTaskCooldown.count;
+      let lastBatch = currentTaskCooldown.lastBatchAt;
+
+      if (batchCount >= 3) {
+        if (Date.now() - lastBatch >= 4 * 60 * 60 * 1000) {
+          batchCount = 1;
+          lastBatch = 0;
+        } else {
+          throw new Error("Cooldown is still active. Please wait 4 hours.");
+        }
+      } else {
+        batchCount += 1;
+        if (batchCount >= 3) {
+          lastBatch = Date.now();
+        }
+      }
+
+      taskCooldowns[taskType] = { count: batchCount, lastBatchAt: lastBatch };
+
       // Update user points and daily completions
       await updateDoc(userRef, {
         points: (profile.points || 0) + activeTask.points,
-        dailyCompletions: newCompletions
+        dailyCompletions: newCompletions,
+        taskCooldowns: taskCooldowns,
+        // Keep old fields for backwards compatibility or general limit if needed, but not necessary. Let's just update them anyway.
+        batchCompletionsCount: batchCount,
+        lastBatchCompletedAt: lastBatch
       });
 
       // Add a conversion log
@@ -182,6 +216,17 @@ export function Dashboard() {
   };
 
   const handleStartTask = (task: any) => {
+    const now = Date.now();
+    const taskType = task.type;
+    const taskCooldown = profile?.taskCooldowns?.[taskType] || { count: 0, lastBatchAt: 0 };
+    const lastBatch = taskCooldown.lastBatchAt;
+    const batchCount = taskCooldown.count;
+    
+    if (batchCount >= 3 && (now - lastBatch < 4 * 60 * 60 * 1000)) {
+        setTaskError("Please wait 4 hours before doing more tasks.");
+        return;
+    }
+    
     window.open(task.url, "_blank");
     setActiveTask(task);
     setTimerLeft(task.timer);
@@ -379,7 +424,18 @@ export function Dashboard() {
 
               {/* Task 2 */}
               <button 
-                onClick={() => setSelectedTaskType("video")}
+                onClick={(e) => {
+                  const now = currentTime;
+                  const taskCooldown = profile?.taskCooldowns?.["video"] || { count: 0, lastBatchAt: 0 };
+                  const lastBatch = taskCooldown.lastBatchAt;
+                  const batchCount = taskCooldown.count;
+                  const timeLeft = 4 * 60 * 60 * 1000 - (now - lastBatch);
+                  if (batchCount >= 3 && timeLeft > 0) {
+                    e.preventDefault();
+                  } else {
+                    setSelectedTaskType("video");
+                  }
+                }}
                 className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col items-center text-center hover:border-indigo-400 hover:shadow-md transition group cursor-pointer"
               >
                 <div className="w-14 h-14 bg-rose-50 rounded-2xl mb-4 flex items-center justify-center text-rose-500 group-hover:bg-rose-100 transition group-hover:scale-110 duration-300">
@@ -388,17 +444,56 @@ export function Dashboard() {
                 <h4 className="font-bold text-slate-800 mb-1">
                   Ads Watch
                 </h4>
-                <p className="text-xs text-slate-500 mb-4">
-                  অ্যাড দেখো
-                </p>
-                <div className="mt-auto w-full py-2.5 bg-slate-50 text-slate-700 rounded-xl text-sm font-bold group-hover:bg-slate-900 group-hover:text-white transition-colors">
-                  Start Task
+                <p className="text-xs text-slate-500 mb-4">অ্যাড দেখো</p>
+                <div className={`mt-auto w-full py-2 rounded-xl text-sm font-bold transition-colors flex flex-col items-center justify-center ${
+                  (() => {
+                    const now = currentTime;
+                    const taskCooldown = profile?.taskCooldowns?.["video"] || { count: 0, lastBatchAt: 0 };
+                    const lastBatch = taskCooldown.lastBatchAt;
+                    const batchCount = taskCooldown.count;
+                    const timeLeft = 4 * 60 * 60 * 1000 - (now - lastBatch);
+                    return batchCount >= 3 && timeLeft > 0;
+                  })() 
+                  ? 'bg-rose-100 text-rose-600 cursor-not-allowed'
+                  : 'bg-slate-50 text-slate-700 group-hover:bg-slate-900 group-hover:text-white'
+                }`}>
+                  {(() => {
+                    const now = currentTime;
+                    const taskCooldown = profile?.taskCooldowns?.["video"] || { count: 0, lastBatchAt: 0 };
+                    const lastBatch = taskCooldown.lastBatchAt;
+                    const batchCount = taskCooldown.count;
+                    const timeLeft = 4 * 60 * 60 * 1000 - (now - lastBatch);
+                    
+                    if (batchCount >= 3 && timeLeft > 0) {
+                        const h = Math.floor(timeLeft / (1000 * 60 * 60));
+                        const m = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                        const s = Math.floor((timeLeft % (1000 * 60)) / 1000);
+                        return (
+                          <div className="flex flex-col items-center leading-tight py-0.5">
+                            <span className="text-[10px] opacity-70">Cooldown</span>
+                            <span className="font-mono text-xs">{h}h {m}m {s}s</span>
+                          </div>
+                        );
+                    }
+                    return 'Start Task';
+                  })()}
                 </div>
               </button>
 
               {/* Task 3 */}
               <button 
-                onClick={() => setSelectedTaskType("article")}
+                onClick={(e) => {
+                  const now = currentTime;
+                  const taskCooldown = profile?.taskCooldowns?.["article"] || { count: 0, lastBatchAt: 0 };
+                  const lastBatch = taskCooldown.lastBatchAt;
+                  const batchCount = taskCooldown.count;
+                  const timeLeft = 4 * 60 * 60 * 1000 - (now - lastBatch);
+                  if (batchCount >= 3 && timeLeft > 0) {
+                    e.preventDefault();
+                  } else {
+                    setSelectedTaskType("article");
+                  }
+                }}
                 className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col items-center text-center hover:border-indigo-400 hover:shadow-md transition group cursor-pointer"
               >
                 <div className="w-14 h-14 bg-emerald-50 rounded-2xl mb-4 flex items-center justify-center text-emerald-500 group-hover:bg-emerald-100 transition group-hover:scale-110 duration-300">
@@ -407,11 +502,39 @@ export function Dashboard() {
                 <h4 className="font-bold text-slate-800 mb-1">
                   Read Articles
                 </h4>
-                <p className="text-xs text-slate-500 mb-4">
-                  আর্টিকেল পড়ে আয়
-                </p>
-                <div className="mt-auto w-full py-2.5 bg-slate-50 text-slate-700 rounded-xl text-sm font-bold group-hover:bg-slate-900 group-hover:text-white transition-colors">
-                  Start Task
+                <p className="text-xs text-slate-500 mb-4">আর্টিকেল পড়ে আয়</p>
+                <div className={`mt-auto w-full py-2 rounded-xl text-sm font-bold transition-colors flex flex-col items-center justify-center ${
+                  (() => {
+                    const now = currentTime;
+                    const taskCooldown = profile?.taskCooldowns?.["article"] || { count: 0, lastBatchAt: 0 };
+                    const lastBatch = taskCooldown.lastBatchAt;
+                    const batchCount = taskCooldown.count;
+                    const timeLeft = 4 * 60 * 60 * 1000 - (now - lastBatch);
+                    return batchCount >= 3 && timeLeft > 0;
+                  })() 
+                  ? 'bg-rose-100 text-rose-600 cursor-not-allowed'
+                  : 'bg-slate-50 text-slate-700 group-hover:bg-slate-900 group-hover:text-white'
+                }`}>
+                  {(() => {
+                    const now = currentTime;
+                    const taskCooldown = profile?.taskCooldowns?.["article"] || { count: 0, lastBatchAt: 0 };
+                    const lastBatch = taskCooldown.lastBatchAt;
+                    const batchCount = taskCooldown.count;
+                    const timeLeft = 4 * 60 * 60 * 1000 - (now - lastBatch);
+                    
+                    if (batchCount >= 3 && timeLeft > 0) {
+                        const h = Math.floor(timeLeft / (1000 * 60 * 60));
+                        const m = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                        const s = Math.floor((timeLeft % (1000 * 60)) / 1000);
+                        return (
+                          <div className="flex flex-col items-center leading-tight py-0.5">
+                            <span className="text-[10px] opacity-70">Cooldown</span>
+                            <span className="font-mono text-xs">{h}h {m}m {s}s</span>
+                          </div>
+                        );
+                    }
+                    return 'Start Task';
+                  })()}
                 </div>
               </button>
 
@@ -686,7 +809,7 @@ export function Dashboard() {
                         const completed = isTaskCompleted(task.id);
                         const prevTask = index > 0 ? arr[index - 1] : null;
                         const prevCompleted = prevTask ? isTaskCompleted(prevTask.id) : true;
-                        const locked = !completed && !prevCompleted;
+                        const locked = (!completed && !prevCompleted);
 
                         return (
                           <button
