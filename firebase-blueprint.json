@@ -1,0 +1,30 @@
+{
+  "rules": {
+    "users": {
+      "__path__": "{uid}",
+      "read": "request.auth != null",
+      "write": "request.auth != null"
+    },
+    "device_tokens": {
+      "__path__": "{deviceToken}",
+      "get": "true",
+      "list": "false",
+      "write": "request.auth != null"
+    },
+    "withdraw_requests": {
+      "__path__": "{requestId}",
+      "read": "request.auth != null",
+      "write": "request.auth != null"
+    },
+    "conversions": {
+      "__path__": "{conversionId}",
+      "read": "request.auth != null",
+      "write": "request.auth != null" 
+    },
+    "tasks": {
+      "__path__": "{taskId}",
+      "read": "request.auth != null",
+      "write": "request.auth != null && request.auth.token.email == 'hasanfreefireid0077@gmail.com'"
+    }
+  }
+}

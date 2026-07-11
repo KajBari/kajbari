@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+html.dark {
+  /* Converts all colors and whites/blacks to a green monochromatic theme */
+  filter: invert(1) sepia(1) hue-rotate(80deg) saturate(2.5) brightness(0.9) contrast(1.1);
+}
+
+html.dark img,
+html.dark video,
+html.dark iframe,
+html.dark [style*="background-image"] {
+  /* Restore images as best as possible */
+  filter: sepia(0) hue-rotate(280deg) saturate(0.4) invert(1);
+}
